@@ -489,3 +489,31 @@ class TestSendGapSeconds:
         for bad in (-1, 31):
             with pytest.raises(ValidationError):
                 AppSettingsUpdate(send_gap_seconds=bad)
+
+
+class TestAutoResendIgnoreRepeaters:
+    @pytest.mark.asyncio
+    async def test_defaults_to_empty(self, test_db):
+        assert (await AppSettingsRepository.get()).auto_resend_ignore_repeaters == []
+
+    @pytest.mark.asyncio
+    async def test_normalizes_and_saves(self, test_db):
+        result = await update_settings(
+            AppSettingsUpdate(auto_resend_ignore_repeaters=[" 3DD6 ", "0xA6d717", "3dd6", ""])
+        )
+        assert result.auto_resend_ignore_repeaters == ["3dd6", "a6d717"]
+        stored = await AppSettingsRepository.get()
+        assert stored.auto_resend_ignore_repeaters == ["3dd6", "a6d717"]
+
+    @pytest.mark.asyncio
+    async def test_empty_list_clears(self, test_db):
+        await update_settings(AppSettingsUpdate(auto_resend_ignore_repeaters=["3dd6"]))
+        result = await update_settings(AppSettingsUpdate(auto_resend_ignore_repeaters=[]))
+        assert result.auto_resend_ignore_repeaters == []
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad", ["3dd", "zz", "ab" * 33])
+    async def test_rejects_bad_prefixes(self, test_db, bad):
+        with pytest.raises(HTTPException) as exc_info:
+            await update_settings(AppSettingsUpdate(auto_resend_ignore_repeaters=[bad]))
+        assert exc_info.value.status_code == 400

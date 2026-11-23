@@ -28,6 +28,7 @@ _JSON_COLUMNS = frozenset(
         "discovery_blocked_types",
         "tracked_telemetry_repeaters",
         "tracked_telemetry_contacts",
+        "auto_resend_ignore_repeaters",
     }
 )
 _DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
@@ -47,6 +48,7 @@ class SettingsUpdate(TypedDict, total=False):
     tracked_telemetry_repeaters: list[str] | None
     tracked_telemetry_contacts: list[str] | None
     auto_resend_channel: bool | None
+    auto_resend_ignore_repeaters: list[str] | None
     telemetry_interval_hours: int | None
     telemetry_routed_hourly: bool | None
     ollama_enabled: bool | None
@@ -124,6 +126,7 @@ class AppSettingsRepository:
             tracked_telemetry_repeaters=_json_column(row, "tracked_telemetry_repeaters", []),
             tracked_telemetry_contacts=_json_column(row, "tracked_telemetry_contacts", []),
             auto_resend_channel=bool(_column(row, "auto_resend_channel")),
+            auto_resend_ignore_repeaters=_json_column(row, "auto_resend_ignore_repeaters", []),
             telemetry_interval_hours=_number_column(
                 row, "telemetry_interval_hours", int, DEFAULT_TELEMETRY_INTERVAL_HOURS
             ),

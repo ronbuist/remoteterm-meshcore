@@ -1073,6 +1073,13 @@ class AppSettings(BaseModel):
             "are automatically byte-perfect resent once (within the 30-second dedup window)"
         ),
     )
+    auto_resend_ignore_repeaters: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Repeater public-key prefixes (hex, lowercase) whose echoes don't count as heard "
+            "for auto-resend. A message echoed only by these repeaters is still resent once."
+        ),
+    )
 
     ollama_enabled: bool = Field(
         default=False,

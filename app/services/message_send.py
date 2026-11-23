@@ -10,7 +10,8 @@ from typing import Any
 from fastapi import HTTPException
 from meshcore import EventType
 
-from app.models import ResendChannelMessageResponse
+from app.models import Message, ResendChannelMessageResponse
+from app.path_utils import hop_matches_prefix, path_hops
 from app.radio import RadioOperationBusyError
 from app.region_scope import normalize_region_scope, resolve_override_scope
 from app.repository import (
@@ -820,6 +821,30 @@ async def send_direct_message_to_contact(
     return message
 
 
+def _has_counting_echo(msg: Message, ignore_prefixes: list[str]) -> bool:
+    """Whether an outgoing channel message has an echo that counts as heard.
+
+    With no ignore list, any echo counts. Otherwise an echo counts when its
+    path has at least one hop that is not on the list (the message got past
+    the ignored repeaters), or when it has no hops at all. A message whose
+    echo count was raised without any stored path counts as heard too, since
+    there is nothing to filter on.
+    """
+    if msg.acked <= 0:
+        return False
+    if not ignore_prefixes or not msg.paths:
+        return True
+    for stored in msg.paths:
+        hops = path_hops(stored.path, stored.path_len)
+        if not hops:
+            return True
+        if any(
+            not any(hop_matches_prefix(hop, prefix) for prefix in ignore_prefixes) for hop in hops
+        ):
+            return True
+    return False
+
+
 async def _channel_echo_watchdog(
     message_id: int,
     radio_manager,
@@ -844,11 +869,18 @@ async def _channel_echo_watchdog(
         msg = await MessageRepository.get_by_id(message_id)
         if not msg:
             return
-        if msg.acked > 0:
+        ignore_prefixes = (await AppSettingsRepository.get()).auto_resend_ignore_repeaters
+        if _has_counting_echo(msg, ignore_prefixes):
             logger.debug(
                 "Echo watchdog: message %d already has %d echo(s), skipping", message_id, msg.acked
             )
             return
+        if msg.acked > 0:
+            logger.info(
+                "Echo watchdog: message %d only echoed by ignored repeater(s) %s",
+                message_id,
+                sorted({hop for p in msg.paths or [] for hop in path_hops(p.path, p.path_len)}),
+            )
         if msg.sender_timestamp is None:
             return
 

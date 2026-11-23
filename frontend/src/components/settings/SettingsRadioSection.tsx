@@ -210,6 +210,7 @@ export function SettingsRadioSection({
   const [knownRegions, setKnownRegions] = useState('');
   const [maxRadioContacts, setMaxRadioContacts] = useState('');
   const [sendGapSeconds, setSendGapSeconds] = useState('');
+  const [resendIgnoreRepeaters, setResendIgnoreRepeaters] = useState('');
   const [floodBusy, setFloodBusy] = useState(false);
   const [floodError, setFloodError] = useState<string | null>(null);
 
@@ -241,6 +242,7 @@ export function SettingsRadioSection({
     setKnownRegions((appSettings.known_regions ?? []).join('\n'));
     setMaxRadioContacts(String(appSettings.max_radio_contacts));
     setSendGapSeconds(String(appSettings.send_gap_seconds));
+    setResendIgnoreRepeaters((appSettings.auto_resend_ignore_repeaters ?? []).join(', '));
   }, [appSettings]);
 
   const currentPreset = useMemo(() => {
@@ -444,6 +446,21 @@ export function SettingsRadioSection({
           return;
         }
         update.send_gap_seconds = newSendGap;
+      }
+      // Ignored repeaters: hex key prefixes, separated by commas, spaces or newlines.
+      const parsedIgnore = resendIgnoreRepeaters
+        .split(/[\s,]+/)
+        .map((p) => p.trim().toLowerCase())
+        .filter((p) => p.length > 0);
+      if (
+        JSON.stringify(parsedIgnore) !==
+        JSON.stringify(appSettings.auto_resend_ignore_repeaters ?? [])
+      ) {
+        if (parsedIgnore.some((p) => !/^(0x)?([0-9a-f]{2}){1,32}$/.test(p))) {
+          setFloodError('Ignored repeaters must be hex key prefixes of whole bytes, e.g. 3dd6');
+          return;
+        }
+        update.auto_resend_ignore_repeaters = parsedIgnore;
       }
       if (Object.keys(update).length > 0) {
         await onSaveAppSettings(update);
@@ -1195,6 +1212,26 @@ export function SettingsRadioSection({
             </p>
           </div>
         </div>
+
+        {appSettings.auto_resend_channel && (
+          <div className="space-y-2 rounded-md border border-border/60 p-3">
+            <Label htmlFor="auto-resend-ignore-repeaters">Ignore Echoes From Repeaters</Label>
+            <Input
+              id="auto-resend-ignore-repeaters"
+              value={resendIgnoreRepeaters}
+              onChange={(e) => setResendIgnoreRepeaters(e.target.value)}
+              placeholder="e.g. 3dd6"
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <p className="text-[0.8125rem] text-muted-foreground">
+              Public-key prefixes (hex) of repeaters that echo your messages but don&apos;t pass
+              them on. A message echoed only by these repeaters still counts as unheard and is
+              resent once. An echo that also went through another repeater counts as heard. Separate
+              several with commas. Saved with Save Messaging Settings.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

@@ -396,6 +396,7 @@ Distance/validation helpers used by path + map UI.
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
 - `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`
 - `auto_resend_channel`
+- `auto_resend_ignore_repeaters`
 - `telemetry_interval_hours`
 - `send_gap_seconds`
 

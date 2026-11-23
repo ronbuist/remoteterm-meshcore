@@ -79,6 +79,7 @@ const baseSettings: AppSettings = {
   tracked_telemetry_repeaters: [],
   tracked_telemetry_contacts: [],
   auto_resend_channel: false,
+  auto_resend_ignore_repeaters: [],
   telemetry_interval_hours: 8,
   telemetry_routed_hourly: false,
   ollama_enabled: false,
@@ -479,6 +480,45 @@ describe('SettingsModal', () => {
     await waitFor(() => {
       expect(onSaveAppSettings).toHaveBeenCalledWith({ send_gap_seconds: 6.5 });
     });
+  });
+
+  it('hides the ignored-repeaters field while auto-resend is off', () => {
+    renderModal();
+    openRadioSection();
+    expect(screen.queryByLabelText('Ignore Echoes From Repeaters')).toBeNull();
+  });
+
+  it('saves ignored repeaters as normalized prefixes', async () => {
+    const { onSaveAppSettings } = renderModal({
+      appSettings: { ...baseSettings, auto_resend_channel: true },
+    });
+    openRadioSection();
+
+    fireEvent.change(screen.getByLabelText('Ignore Echoes From Repeaters'), {
+      target: { value: '3DD6, a6d717' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save Messaging Settings' })[0]);
+
+    await waitFor(() => {
+      expect(onSaveAppSettings).toHaveBeenCalledWith({
+        auto_resend_ignore_repeaters: ['3dd6', 'a6d717'],
+      });
+    });
+  });
+
+  it('rejects ignored repeaters that are not whole hex bytes', async () => {
+    const { onSaveAppSettings } = renderModal({
+      appSettings: { ...baseSettings, auto_resend_channel: true },
+    });
+    openRadioSection();
+
+    fireEvent.change(screen.getByLabelText('Ignore Echoes From Repeaters'), {
+      target: { value: '3dd' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save Messaging Settings' })[0]);
+
+    expect(await screen.findByText(/must be hex key prefixes/)).toBeTruthy();
+    expect(onSaveAppSettings).not.toHaveBeenCalled();
   });
 
   it('does not save max contacts when unchanged', async () => {

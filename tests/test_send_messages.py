@@ -10,6 +10,8 @@ from meshcore import EventType
 
 import app.services.message_send as message_send_service
 from app.models import (
+    Message,
+    MessagePath,
     SendChannelMessageRequest,
     SendDirectMessageRequest,
 )
@@ -1856,6 +1858,108 @@ class TestChannelEchoWatchdog:
             )
 
         mc.commands.send_chan_msg.assert_not_called()
+
+
+class TestChannelEchoWatchdogIgnoreRepeaters:
+    """Echoes only from repeaters on auto_resend_ignore_repeaters don't count as heard."""
+
+    @pytest.fixture(autouse=True)
+    def _skip_watchdog_delay(self, monkeypatch):
+        monkeypatch.setattr(message_send_service, "ECHO_WATCHDOG_DELAY_SECONDS", 0)
+
+    async def _run(self, chan_byte: str, paths: list[tuple[str, int | None]], ignore: list[str]):
+        chan_key = chan_byte * 16
+        await ChannelRepository.upsert(key=chan_key, name=f"#ign{chan_byte}")
+        await AppSettingsRepository.update(auto_resend_ignore_repeaters=ignore)
+        now = int(time.time())
+        msg_id = await MessageRepository.create(
+            msg_type="CHAN",
+            text="MyNode: hello",
+            conversation_key=chan_key.upper(),
+            sender_timestamp=now,
+            received_at=now,
+            outgoing=True,
+        )
+        for path, path_len in paths:
+            await MessageRepository.add_path(msg_id, path, received_at=now, path_len=path_len)
+            await MessageRepository.increment_ack_count(msg_id)
+
+        mc = _make_mc(name="MyNode")
+        with patch.object(radio_manager, "_meshcore", mc):
+            await message_send_service._channel_echo_watchdog(
+                message_id=msg_id,
+                radio_manager=radio_manager,
+                broadcast_fn=MagicMock(),
+                error_broadcast_fn=MagicMock(),
+            )
+        return mc.commands.send_chan_msg
+
+    @pytest.mark.asyncio
+    async def test_resends_when_only_ignored_repeater_echoed(self, test_db):
+        send = await self._run("f1", [("3dd6", 1)], ["3dd6"])
+        send.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_skips_when_list_empty(self, test_db):
+        send = await self._run("f2", [("3dd6", 1)], [])
+        send.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_skips_when_another_repeater_echoed(self, test_db):
+        send = await self._run("f3", [("3dd6", 1), ("a6d7", 1)], ["3dd6"])
+        send.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_skips_when_ignored_repeater_relayed_a_copy_from_elsewhere(self, test_db):
+        """Path a6d7 -> 3dd6: the message got past the ignored repeater."""
+        send = await self._run("f4", [("a6d73dd6", 2)], ["3dd6"])
+        send.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("path", "path_len", "prefix"),
+        [
+            ("3d", 1, "3dd695"),  # 1-byte hop hash, longer prefix
+            ("3dd6", 1, "3dd6"),  # 2-byte hop hash
+            ("3dd695", 1, "3d"),  # 3-byte hop hash, shorter prefix
+            ("3dd695", 1, "3DD695"),  # case-insensitive
+            ("3d", None, "3d"),  # legacy row without hop count
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_prefix_lengths(self, test_db, path, path_len, prefix):
+        send = await self._run("f5", [(path, path_len)], [prefix.lower()])
+        send.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_zero_hop_echo_counts_as_heard(self, test_db):
+        send = await self._run("f6", [("", 0)], ["3dd6"])
+        send.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_echo_still_resends(self, test_db):
+        send = await self._run("f7", [], ["3dd6"])
+        send.assert_awaited_once()
+
+
+class TestHasCountingEcho:
+    def _msg(self, acked: int, paths):
+        return Message(
+            id=1,
+            type="CHAN",
+            conversation_key="aa" * 16,
+            text="x",
+            received_at=0,
+            acked=acked,
+            paths=[MessagePath(path=p, received_at=0, path_len=n) for p, n in paths]
+            if paths is not None
+            else None,
+        )
+
+    def test_acked_without_stored_paths_counts(self):
+        assert message_send_service._has_counting_echo(self._msg(1, None), ["3dd6"]) is True
+
+    def test_no_echo_never_counts(self):
+        assert message_send_service._has_counting_echo(self._msg(0, []), []) is False
 
 
 class TestRadioExceptionMidSend:

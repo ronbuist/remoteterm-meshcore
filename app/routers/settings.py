@@ -11,6 +11,7 @@ from app.models import (
     AppSettings,
     TelemetryHistoryEntry,
 )
+from app.path_utils import normalize_repeater_prefixes
 from app.region_scope import normalize_region_scope
 from app.repository import (
     AppSettingsRepository,
@@ -82,6 +83,13 @@ class AppSettingsUpdate(BaseModel):
     auto_resend_channel: bool | None = Field(
         default=None,
         description="Auto-resend channel messages once if no echo heard within 2 seconds",
+    )
+    auto_resend_ignore_repeaters: list[str] | None = Field(
+        default=None,
+        description=(
+            "Repeater public-key prefixes (hex, 1-32 bytes) whose echoes don't count "
+            "as heard for auto-resend"
+        ),
     )
     telemetry_interval_hours: int | None = Field(
         default=None,
@@ -277,6 +285,13 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
     # Auto-resend channel
     if update.auto_resend_channel is not None:
         kwargs["auto_resend_channel"] = update.auto_resend_channel
+    if update.auto_resend_ignore_repeaters is not None:
+        try:
+            cleaned_prefixes = normalize_repeater_prefixes(update.auto_resend_ignore_repeaters)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.info("Updating auto_resend_ignore_repeaters to %s", cleaned_prefixes)
+        kwargs["auto_resend_ignore_repeaters"] = cleaned_prefixes
 
     # Telemetry interval preference. Invalid values fall back to default
     # rather than 400-ing so a stale client can't brick settings saves.

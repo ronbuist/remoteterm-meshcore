@@ -395,6 +395,7 @@ export interface AppSettings {
   tracked_telemetry_repeaters: string[];
   tracked_telemetry_contacts: string[];
   auto_resend_channel: boolean;
+  auto_resend_ignore_repeaters: string[];
   telemetry_interval_hours: number;
   telemetry_routed_hourly: boolean;
   ollama_enabled: boolean;
@@ -408,6 +409,7 @@ export interface AppSettingsUpdate {
   auto_decrypt_dm_on_advert?: boolean;
   advert_interval?: number;
   auto_resend_channel?: boolean;
+  auto_resend_ignore_repeaters?: string[];
   flood_scope?: string;
   known_regions?: string[];
   blocked_keys?: string[];

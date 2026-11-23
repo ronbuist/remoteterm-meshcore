@@ -327,3 +327,29 @@ class TestContactFromRadioDictHashMode:
         assert upsert.direct_path == ""
         assert upsert.direct_path_len == -1
         assert upsert.direct_path_hash_mode == -1
+
+
+class TestRepeaterPrefixHelpers:
+    def test_path_hops_splits_by_hop_count(self):
+        from app.path_utils import path_hops
+
+        assert path_hops("A6D73DD6", 2) == ["a6d7", "3dd6"]
+        assert path_hops("a6d7", None) == ["a6", "d7"]
+        assert path_hops("", 0) == []
+
+    def test_hop_matches_prefix_uses_shorter_length(self):
+        from app.path_utils import hop_matches_prefix
+
+        assert hop_matches_prefix("3d", "3dd695")
+        assert hop_matches_prefix("3dd695", "3dd6")
+        assert not hop_matches_prefix("a6d7", "3dd6")
+        assert not hop_matches_prefix("", "3dd6")
+
+    def test_normalize_repeater_prefixes(self):
+        import pytest
+
+        from app.path_utils import normalize_repeater_prefixes
+
+        assert normalize_repeater_prefixes(["3DD6", " 0x3dd6", "", "a6"]) == ["3dd6", "a6"]
+        with pytest.raises(ValueError):
+            normalize_repeater_prefixes(["abc"])

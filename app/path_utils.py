@@ -162,6 +162,48 @@ def first_hop_hex(path_hex: str, hop_count: int) -> str | None:
     return hops[0] if hops else None
 
 
+def path_hops(path_hex: str, hop_count: int | None) -> list[str]:
+    """Split a stored path into lowercase per-hop hashes.
+
+    ``hop_count`` None means a legacy row with 1-byte hops. Empty for a
+    direct (zero-hop) path.
+    """
+    if hop_count is None:
+        hop_count = len(path_hex or "") // 2
+    return [hop.lower() for hop in split_path_hex(path_hex, hop_count)]
+
+
+def normalize_repeater_prefixes(prefixes: Iterable[str]) -> list[str]:
+    """Clean a list of repeater public-key prefixes.
+
+    Strips whitespace and an optional ``0x``, lowercases, drops empties and
+    duplicates (keeping order). Raises ValueError for anything that is not
+    1 to 32 whole bytes of hex.
+    """
+    cleaned: list[str] = []
+    for raw in prefixes:
+        prefix = (raw or "").strip().lower()
+        if prefix.startswith("0x"):
+            prefix = prefix[2:]
+        if not prefix:
+            continue
+        if len(prefix) % 2 or len(prefix) > 64:
+            raise ValueError(f"Repeater prefix {raw!r} must be 1 to 32 whole bytes of hex")
+        try:
+            bytes.fromhex(prefix)
+        except ValueError as exc:
+            raise ValueError(f"Repeater prefix {raw!r} is not hex") from exc
+        if prefix not in cleaned:
+            cleaned.append(prefix)
+    return cleaned
+
+
+def hop_matches_prefix(hop_hex: str, prefix: str) -> bool:
+    """True when a hop hash and a key prefix agree over the shorter of the two."""
+    n = min(len(hop_hex), len(prefix))
+    return n > 0 and hop_hex[:n].lower() == prefix[:n].lower()
+
+
 def normalize_contact_route(
     path_hex: str | None,
     path_len: int | None,

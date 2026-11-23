@@ -401,6 +401,7 @@ Repository writes should prefer typed models such as `ContactUpsert` over ad hoc
 - `blocked_keys`, `blocked_names`, `discovery_blocked_types`
 - `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`
 - `auto_resend_channel`
+- `auto_resend_ignore_repeaters` (repeater key prefixes whose echoes don't count as heard for auto-resend; an echo counts if any hop in its path is not on the list)
 - `telemetry_interval_hours`
 - `send_gap_seconds`
 
