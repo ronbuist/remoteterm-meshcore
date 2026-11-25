@@ -55,6 +55,7 @@ class SettingsUpdate(TypedDict, total=False):
     ollama_base_url: str | None
     ollama_model: str | None
     send_gap_seconds: float | None
+    replay_filter_hours: int | None
 
 
 def _column(row: Any, name: str) -> Any:
@@ -137,6 +138,7 @@ class AppSettingsRepository:
             send_gap_seconds=_number_column(
                 row, "send_gap_seconds", float, DEFAULT_SEND_GAP_SECONDS
             ),
+            replay_filter_hours=_number_column(row, "replay_filter_hours", int, 0),
         )
 
     @staticmethod

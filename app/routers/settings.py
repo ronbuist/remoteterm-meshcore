@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.models import (
     CONTACT_TYPE_REPEATER,
+    MAX_REPLAY_FILTER_HOURS,
     MAX_SEND_GAP_SECONDS,
     AppSettings,
     TelemetryHistoryEntry,
@@ -121,6 +122,15 @@ class AppSettingsUpdate(BaseModel):
         ge=0,
         le=MAX_SEND_GAP_SECONDS,
         description="Longest wait between outgoing sends when no echo is heard (0 = no wait)",
+    )
+    replay_filter_hours: int | None = Field(
+        default=None,
+        ge=0,
+        le=MAX_REPLAY_FILTER_HOURS,
+        description=(
+            "Hide channel messages whose text repeats one from the last N hours "
+            "with a different timestamp (0 = off)"
+        ),
     )
 
 
@@ -330,6 +340,9 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
     if update.send_gap_seconds is not None:
         logger.info("Updating send_gap_seconds to %s", update.send_gap_seconds)
         kwargs["send_gap_seconds"] = update.send_gap_seconds
+    if update.replay_filter_hours is not None:
+        logger.info("Updating replay_filter_hours to %s", update.replay_filter_hours)
+        kwargs["replay_filter_hours"] = update.replay_filter_hours
 
     # Flood scope
     flood_scope_changed = False

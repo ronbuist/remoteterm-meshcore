@@ -989,6 +989,7 @@ class UnreadCounts(BaseModel):
 # Default gap between outgoing sends; MAX bounds how long a queued send can wait.
 DEFAULT_SEND_GAP_SECONDS = 10.0
 MAX_SEND_GAP_SECONDS = 30.0
+MAX_REPLAY_FILTER_HOURS = 168
 
 
 class AppSettings(BaseModel):
@@ -1092,6 +1093,14 @@ class AppSettings(BaseModel):
     ollama_model: str = Field(
         default="",
         description="Ollama model used for unread channel summaries (e.g. phi3:mini)",
+    )
+    replay_filter_hours: int = Field(
+        default=0,
+        description=(
+            "Hide an incoming channel message whose text exactly matches one already "
+            "on that channel within this many hours but carries a different sender "
+            "timestamp (a replay). 0 = off"
+        ),
     )
     send_gap_seconds: float = Field(
         default=DEFAULT_SEND_GAP_SECONDS,

@@ -402,6 +402,7 @@ export interface AppSettings {
   ollama_base_url: string;
   ollama_model: string;
   send_gap_seconds: number;
+  replay_filter_hours: number;
 }
 
 export interface AppSettingsUpdate {
@@ -421,6 +422,7 @@ export interface AppSettingsUpdate {
   ollama_base_url?: string;
   ollama_model?: string;
   send_gap_seconds?: number;
+  replay_filter_hours?: number;
 }
 
 export interface ChannelUnreadSummary {

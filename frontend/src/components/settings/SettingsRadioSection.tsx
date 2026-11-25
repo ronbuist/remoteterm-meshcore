@@ -210,6 +210,7 @@ export function SettingsRadioSection({
   const [knownRegions, setKnownRegions] = useState('');
   const [maxRadioContacts, setMaxRadioContacts] = useState('');
   const [sendGapSeconds, setSendGapSeconds] = useState('');
+  const [replayFilterHours, setReplayFilterHours] = useState('');
   const [resendIgnoreRepeaters, setResendIgnoreRepeaters] = useState('');
   const [floodBusy, setFloodBusy] = useState(false);
   const [floodError, setFloodError] = useState<string | null>(null);
@@ -242,6 +243,7 @@ export function SettingsRadioSection({
     setKnownRegions((appSettings.known_regions ?? []).join('\n'));
     setMaxRadioContacts(String(appSettings.max_radio_contacts));
     setSendGapSeconds(String(appSettings.send_gap_seconds));
+    setReplayFilterHours(String(appSettings.replay_filter_hours ?? 0));
     setResendIgnoreRepeaters((appSettings.auto_resend_ignore_repeaters ?? []).join(', '));
   }, [appSettings]);
 
@@ -446,6 +448,17 @@ export function SettingsRadioSection({
           return;
         }
         update.send_gap_seconds = newSendGap;
+      }
+      const newReplayHours = Number(replayFilterHours);
+      if (
+        replayFilterHours.trim() !== '' &&
+        newReplayHours !== (appSettings.replay_filter_hours ?? 0)
+      ) {
+        if (!Number.isInteger(newReplayHours) || newReplayHours < 0 || newReplayHours > 168) {
+          setFloodError('Replay filter must be a whole number of hours between 0 and 168');
+          return;
+        }
+        update.replay_filter_hours = newReplayHours;
       }
       // Ignored repeaters: hex key prefixes, separated by commas, spaces or newlines.
       const parsedIgnore = resendIgnoreRepeaters
@@ -1379,6 +1392,29 @@ export function SettingsRadioSection({
           previous message is heard. Every message also waits until the radio hears nothing for 3
           seconds. A repeater cannot hear while it repeats, so messages sent too close together get
           lost. This setting is the longest wait.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="replay-filter-hours">Hide Replayed Channel Messages</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id="replay-filter-hours"
+            type="number"
+            min="0"
+            max="168"
+            step="1"
+            value={replayFilterHours}
+            onChange={(e) => setReplayFilterHours(e.target.value)}
+            className="w-28"
+          />
+          <span className="text-sm text-muted-foreground">hours (0 = off)</span>
+        </div>
+        <p className="text-[0.8125rem] text-muted-foreground">
+          Drops an incoming channel message whose text exactly matches one already on that channel
+          within this many hours but with a different timestamp, such as someone replaying old
+          messages. Short common texts like &quot;ok&quot; from different people within the window
+          are dropped too. Your own messages and normal repeats are not affected.
         </p>
       </div>
 

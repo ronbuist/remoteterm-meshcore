@@ -720,6 +720,50 @@ class MessageRepository:
         return MessageRepository._row_to_message(row)
 
     @staticmethod
+    async def find_channel_replay_original(
+        conversation_key: str,
+        text: str,
+        sender_timestamp: int | None,
+        received_at: int,
+        window_seconds: int,
+    ) -> int | None:
+        """Find the earlier channel message that an incoming one replays.
+
+        A replay has the same channel and exact text as a message received within
+        ``window_seconds`` (either side of ``received_at``) but a different sender
+        timestamp. Returns that message's id, or None. When a row with the same
+        timestamp exists the incoming packet is an ordinary echo, not a replay,
+        so None is returned and the normal duplicate handling applies.
+        """
+        query = """
+            SELECT id FROM messages
+            WHERE type = 'CHAN' AND conversation_key = ? AND text = ?
+              AND COALESCE(sender_timestamp, 0) != COALESCE(?, 0)
+              AND ABS(received_at - ?) <= ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM messages AS same
+                  WHERE same.type = 'CHAN' AND same.conversation_key = ? AND same.text = ?
+                    AND COALESCE(same.sender_timestamp, 0) = COALESCE(?, 0)
+              )
+            ORDER BY received_at ASC, id ASC
+            LIMIT 1
+        """
+        params: list[Any] = [
+            conversation_key,
+            text,
+            sender_timestamp,
+            received_at,
+            window_seconds,
+            conversation_key,
+            text,
+            sender_timestamp,
+        ]
+        async with db.readonly() as conn:
+            async with conn.execute(query, params) as cursor:
+                row = await cursor.fetchone()
+        return int(row["id"]) if row else None
+
+    @staticmethod
     async def get_unread_counts(
         name: str | None = None,
         blocked_keys: list[str] | None = None,

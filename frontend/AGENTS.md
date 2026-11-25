@@ -397,6 +397,7 @@ Distance/validation helpers used by path + map UI.
 - `tracked_telemetry_repeaters`, `tracked_telemetry_contacts`
 - `auto_resend_channel`
 - `auto_resend_ignore_repeaters`
+- `replay_filter_hours`
 - `telemetry_interval_hours`
 - `send_gap_seconds`
 

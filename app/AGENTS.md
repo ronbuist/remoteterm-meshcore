@@ -404,6 +404,7 @@ Repository writes should prefer typed models such as `ContactUpsert` over ad hoc
 - `auto_resend_ignore_repeaters` (repeater key prefixes whose echoes don't count as heard for auto-resend; an echo counts if any hop in its path is not on the list)
 - `telemetry_interval_hours`
 - `send_gap_seconds`
+- `replay_filter_hours` (0 = off; incoming channel messages with the same channel + exact text as one received within N hours but a different sender timestamp are not stored; their raw packet is linked to the original)
 
 Note: MQTT, community MQTT, and bot configs were migrated to the `fanout_configs` table (migrations 36-38).
 

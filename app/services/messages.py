@@ -4,7 +4,12 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.models import Message, MessagePath
-from app.repository import ContactRepository, MessageRepository, RawPacketRepository
+from app.repository import (
+    AppSettingsRepository,
+    ContactRepository,
+    MessageRepository,
+    RawPacketRepository,
+)
 
 if TYPE_CHECKING:
     from app.decoder import DecryptedDirectMessage
@@ -263,6 +268,40 @@ async def handle_duplicate_message(
     )
 
 
+async def find_channel_replay(
+    *,
+    conversation_key: str,
+    text: str,
+    sender_timestamp: int | None,
+    received_at: int,
+    channel_name: str | None,
+) -> int | None:
+    """Return the id of the message an incoming channel message replays, if any.
+
+    Off unless ``replay_filter_hours`` is set. Sender names in channel messages
+    are unsigned, so a replay can't be told apart by sender; it is matched on
+    channel + exact text + a different sender timestamp within the window.
+    """
+    hours = (await AppSettingsRepository.get()).replay_filter_hours or 0
+    if hours <= 0:
+        return None
+    original_id = await MessageRepository.find_channel_replay_original(
+        conversation_key=conversation_key,
+        text=text,
+        sender_timestamp=sender_timestamp,
+        received_at=received_at,
+        window_seconds=hours * 3600,
+    )
+    if original_id is not None:
+        logger.info(
+            'Dropped replayed channel message "%s" for %r (replays msg ID %d)',
+            truncate_for_log(text),
+            _format_channel_log_target(channel_name, conversation_key),
+            original_id,
+        )
+    return original_id
+
+
 async def create_message_from_decrypted(
     *,
     packet_id: int,
@@ -292,6 +331,19 @@ async def create_message_from_decrypted(
         candidates = await ContactRepository.get_by_name(sender)
         if len(candidates) == 1:
             resolved_sender_key = candidates[0].public_key
+
+    replayed_id = await find_channel_replay(
+        conversation_key=channel_key_normalized,
+        text=text,
+        sender_timestamp=timestamp,
+        received_at=received,
+        channel_name=channel_name,
+    )
+    if replayed_id is not None:
+        # Link the packet to the original so it isn't re-decrypted later and
+        # stays traceable in the packet view; the message itself isn't stored.
+        await RawPacketRepository.mark_decrypted(packet_id, replayed_id)
+        return None
 
     msg_id = await MessageRepository.create(
         msg_type="CHAN",
@@ -454,6 +506,18 @@ async def create_fallback_channel_message(
         candidates = await ContactRepository.get_by_name(sender_name)
         if len(candidates) == 1:
             resolved_sender_key = candidates[0].public_key
+
+    if (
+        await find_channel_replay(
+            conversation_key=conversation_key_normalized,
+            text=text,
+            sender_timestamp=sender_timestamp,
+            received_at=received_at,
+            channel_name=channel_name,
+        )
+        is not None
+    ):
+        return None
 
     msg_id = await MessageRepository.create(
         msg_type="CHAN",

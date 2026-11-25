@@ -80,6 +80,7 @@ const baseSettings: AppSettings = {
   tracked_telemetry_contacts: [],
   auto_resend_channel: false,
   auto_resend_ignore_repeaters: [],
+  replay_filter_hours: 0,
   telemetry_interval_hours: 8,
   telemetry_routed_hourly: false,
   ollama_enabled: false,
@@ -480,6 +481,33 @@ describe('SettingsModal', () => {
     await waitFor(() => {
       expect(onSaveAppSettings).toHaveBeenCalledWith({ send_gap_seconds: 6.5 });
     });
+  });
+
+  it('saves the replay filter window', async () => {
+    const { onSaveAppSettings } = renderModal();
+    openRadioSection();
+
+    fireEvent.change(screen.getByLabelText('Hide Replayed Channel Messages'), {
+      target: { value: '24' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save Messaging Settings' })[0]);
+
+    await waitFor(() => {
+      expect(onSaveAppSettings).toHaveBeenCalledWith({ replay_filter_hours: 24 });
+    });
+  });
+
+  it('rejects a replay filter window outside 0-168 hours', async () => {
+    const { onSaveAppSettings } = renderModal();
+    openRadioSection();
+
+    fireEvent.change(screen.getByLabelText('Hide Replayed Channel Messages'), {
+      target: { value: '200' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save Messaging Settings' })[0]);
+
+    expect(await screen.findByText(/Replay filter must be/)).toBeTruthy();
+    expect(onSaveAppSettings).not.toHaveBeenCalled();
   });
 
   it('hides the ignored-repeaters field while auto-resend is off', () => {
