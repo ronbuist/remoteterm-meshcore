@@ -29,6 +29,7 @@ _JSON_COLUMNS = frozenset(
         "tracked_telemetry_repeaters",
         "tracked_telemetry_contacts",
         "auto_resend_ignore_repeaters",
+        "geofence_channels",
     }
 )
 _DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
@@ -56,6 +57,11 @@ class SettingsUpdate(TypedDict, total=False):
     ollama_model: str | None
     send_gap_seconds: float | None
     replay_filter_hours: int | None
+    geofence_lat: float | None
+    geofence_lon: float | None
+    geofence_radius_km: float | None
+    geofence_channels: list[str] | None
+    geofence_reply_window_minutes: int | None
 
 
 def _column(row: Any, name: str) -> Any:
@@ -139,6 +145,13 @@ class AppSettingsRepository:
                 row, "send_gap_seconds", float, DEFAULT_SEND_GAP_SECONDS
             ),
             replay_filter_hours=_number_column(row, "replay_filter_hours", int, 0),
+            geofence_lat=_number_column(row, "geofence_lat", float, None),
+            geofence_lon=_number_column(row, "geofence_lon", float, None),
+            geofence_radius_km=_number_column(row, "geofence_radius_km", float, 0.0),
+            geofence_channels=_json_column(row, "geofence_channels", []),
+            geofence_reply_window_minutes=_number_column(
+                row, "geofence_reply_window_minutes", int, 30
+            ),
         )
 
     @staticmethod

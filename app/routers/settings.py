@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field
 
 from app.models import (
     CONTACT_TYPE_REPEATER,
+    MAX_GEOFENCE_RADIUS_KM,
+    MAX_GEOFENCE_REPLY_WINDOW_MINUTES,
     MAX_REPLAY_FILTER_HOURS,
     MAX_SEND_GAP_SECONDS,
     AppSettings,
@@ -130,6 +132,34 @@ class AppSettingsUpdate(BaseModel):
         description=(
             "Hide channel messages whose text repeats one from the last N hours "
             "with a different timestamp (0 = off)"
+        ),
+    )
+    geofence_lat: float | None = Field(
+        default=None, ge=-90, le=90, description="Latitude of the geofence centre"
+    )
+    geofence_lon: float | None = Field(
+        default=None, ge=-180, le=180, description="Longitude of the geofence centre"
+    )
+    geofence_radius_km: float | None = Field(
+        default=None,
+        ge=0,
+        le=MAX_GEOFENCE_RADIUS_KM,
+        description=(
+            "Drop channel messages whose first located repeater is within this many km "
+            "of the geofence centre (0 = off)"
+        ),
+    )
+    geofence_channels: list[str] | None = Field(
+        default=None,
+        description="Channels the geofence applies to, by name or 32-hex channel key",
+    )
+    geofence_reply_window_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=MAX_GEOFENCE_REPLY_WINDOW_MINUTES,
+        description=(
+            "Let geofenced messages through for this many minutes after our own "
+            "message on that channel (0 = off)"
         ),
     )
 
@@ -343,6 +373,24 @@ async def update_settings(update: AppSettingsUpdate) -> AppSettings:
     if update.replay_filter_hours is not None:
         logger.info("Updating replay_filter_hours to %s", update.replay_filter_hours)
         kwargs["replay_filter_hours"] = update.replay_filter_hours
+    if update.geofence_lat is not None:
+        kwargs["geofence_lat"] = update.geofence_lat
+    if update.geofence_lon is not None:
+        kwargs["geofence_lon"] = update.geofence_lon
+    if update.geofence_radius_km is not None:
+        kwargs["geofence_radius_km"] = update.geofence_radius_km
+    if update.geofence_channels is not None:
+        cleaned_channels: list[str] = []
+        for entry in update.geofence_channels:
+            name = (entry or "").strip()
+            if name and name.casefold() not in {c.casefold() for c in cleaned_channels}:
+                cleaned_channels.append(name)
+        kwargs["geofence_channels"] = cleaned_channels
+    if update.geofence_reply_window_minutes is not None:
+        kwargs["geofence_reply_window_minutes"] = update.geofence_reply_window_minutes
+    geofence_changes = {k: v for k, v in kwargs.items() if k.startswith("geofence_")}
+    if geofence_changes:
+        logger.info("Updating geofence settings: %s", geofence_changes)
 
     # Flood scope
     flood_scope_changed = False

@@ -990,6 +990,8 @@ class UnreadCounts(BaseModel):
 DEFAULT_SEND_GAP_SECONDS = 10.0
 MAX_SEND_GAP_SECONDS = 30.0
 MAX_REPLAY_FILTER_HOURS = 168
+MAX_GEOFENCE_RADIUS_KM = 1000
+MAX_GEOFENCE_REPLY_WINDOW_MINUTES = 1440
 
 
 class AppSettings(BaseModel):
@@ -1100,6 +1102,37 @@ class AppSettings(BaseModel):
             "Hide an incoming channel message whose text exactly matches one already "
             "on that channel within this many hours but carries a different sender "
             "timestamp (a replay). 0 = off"
+        ),
+    )
+    geofence_lat: float | None = Field(
+        default=None,
+        description="Latitude of the geofence centre for channel messages",
+    )
+    geofence_lon: float | None = Field(
+        default=None,
+        description="Longitude of the geofence centre for channel messages",
+    )
+    geofence_radius_km: float = Field(
+        default=0,
+        description=(
+            "Drop incoming channel messages (on geofence_channels) whose first "
+            "located repeater in the path lies within this many km of the "
+            "geofence centre. 0 = off"
+        ),
+    )
+    geofence_channels: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Channels the geofence applies to, by name (e.g. Public, #amsterdam) "
+            "or 32-hex channel key. Empty = no channels"
+        ),
+    )
+    geofence_reply_window_minutes: int = Field(
+        default=30,
+        description=(
+            "A geofenced message still comes through if it arrives within this many "
+            "minutes after one of our own messages on that channel. Messages that "
+            "@[mention] this radio always come through. 0 = no reply window"
         ),
     )
     send_gap_seconds: float = Field(

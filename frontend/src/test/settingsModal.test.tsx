@@ -81,6 +81,11 @@ const baseSettings: AppSettings = {
   auto_resend_channel: false,
   auto_resend_ignore_repeaters: [],
   replay_filter_hours: 0,
+  geofence_lat: null,
+  geofence_lon: null,
+  geofence_radius_km: 0,
+  geofence_channels: [],
+  geofence_reply_window_minutes: 30,
   telemetry_interval_hours: 8,
   telemetry_routed_hourly: false,
   ollama_enabled: false,
@@ -495,6 +500,43 @@ describe('SettingsModal', () => {
     await waitFor(() => {
       expect(onSaveAppSettings).toHaveBeenCalledWith({ replay_filter_hours: 24 });
     });
+  });
+
+  it('saves the geofence settings', async () => {
+    const { onSaveAppSettings } = renderModal();
+    openRadioSection();
+
+    fireEvent.change(screen.getByLabelText('Centre latitude'), { target: { value: '52.37' } });
+    fireEvent.change(screen.getByLabelText('Centre longitude'), { target: { value: '4.9' } });
+    fireEvent.change(screen.getByLabelText('Radius (km, 0 = off)'), { target: { value: '20' } });
+    fireEvent.change(screen.getByLabelText('Channels (names or keys, comma-separated)'), {
+      target: { value: 'Public, #amsterdam' },
+    });
+    fireEvent.change(screen.getByLabelText('Reply window'), { target: { value: '15' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save Messaging Settings' })[0]);
+
+    await waitFor(() => {
+      expect(onSaveAppSettings).toHaveBeenCalledWith({
+        geofence_radius_km: 20,
+        geofence_lat: 52.37,
+        geofence_lon: 4.9,
+        geofence_channels: ['Public', '#amsterdam'],
+        geofence_reply_window_minutes: 15,
+      });
+    });
+  });
+
+  it('requires a geofence centre when the radius is set', async () => {
+    const { onSaveAppSettings } = renderModal();
+    openRadioSection();
+
+    fireEvent.change(screen.getByLabelText('Radius (km, 0 = off)'), { target: { value: '20' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save Messaging Settings' })[0]);
+
+    expect(
+      await screen.findByText('Set the geofence centre latitude and longitude')
+    ).toBeInTheDocument();
+    expect(onSaveAppSettings).not.toHaveBeenCalled();
   });
 
   it('rejects a replay filter window outside 0-168 hours', async () => {

@@ -211,6 +211,11 @@ export function SettingsRadioSection({
   const [maxRadioContacts, setMaxRadioContacts] = useState('');
   const [sendGapSeconds, setSendGapSeconds] = useState('');
   const [replayFilterHours, setReplayFilterHours] = useState('');
+  const [geofenceLat, setGeofenceLat] = useState('');
+  const [geofenceLon, setGeofenceLon] = useState('');
+  const [geofenceRadius, setGeofenceRadius] = useState('');
+  const [geofenceChannels, setGeofenceChannels] = useState('');
+  const [geofenceReplyWindow, setGeofenceReplyWindow] = useState('');
   const [resendIgnoreRepeaters, setResendIgnoreRepeaters] = useState('');
   const [floodBusy, setFloodBusy] = useState(false);
   const [floodError, setFloodError] = useState<string | null>(null);
@@ -244,6 +249,11 @@ export function SettingsRadioSection({
     setMaxRadioContacts(String(appSettings.max_radio_contacts));
     setSendGapSeconds(String(appSettings.send_gap_seconds));
     setReplayFilterHours(String(appSettings.replay_filter_hours ?? 0));
+    setGeofenceLat(appSettings.geofence_lat == null ? '' : String(appSettings.geofence_lat));
+    setGeofenceLon(appSettings.geofence_lon == null ? '' : String(appSettings.geofence_lon));
+    setGeofenceRadius(String(appSettings.geofence_radius_km ?? 0));
+    setGeofenceChannels((appSettings.geofence_channels ?? []).join(', '));
+    setGeofenceReplyWindow(String(appSettings.geofence_reply_window_minutes ?? 30));
     setResendIgnoreRepeaters((appSettings.auto_resend_ignore_repeaters ?? []).join(', '));
   }, [appSettings]);
 
@@ -474,6 +484,57 @@ export function SettingsRadioSection({
           return;
         }
         update.auto_resend_ignore_repeaters = parsedIgnore;
+      }
+      // Geofence: centre, radius (0 = off), channels and reply window.
+      const newRadius = Number(geofenceRadius);
+      if (geofenceRadius.trim() !== '' && newRadius !== (appSettings.geofence_radius_km ?? 0)) {
+        if (isNaN(newRadius) || newRadius < 0 || newRadius > 1000) {
+          setFloodError('Geofence radius must be between 0 and 1000 km');
+          return;
+        }
+        update.geofence_radius_km = newRadius;
+      }
+      const geofenceOn = geofenceRadius.trim() !== '' && newRadius > 0;
+      if (geofenceOn && (geofenceLat.trim() === '' || geofenceLon.trim() === '')) {
+        setFloodError('Set the geofence centre latitude and longitude');
+        return;
+      }
+      if (geofenceLat.trim() !== '') {
+        const newLat = Number(geofenceLat);
+        if (isNaN(newLat) || newLat < -90 || newLat > 90) {
+          setFloodError('Geofence latitude must be between -90 and 90');
+          return;
+        }
+        if (newLat !== appSettings.geofence_lat) update.geofence_lat = newLat;
+      }
+      if (geofenceLon.trim() !== '') {
+        const newLon = Number(geofenceLon);
+        if (isNaN(newLon) || newLon < -180 || newLon > 180) {
+          setFloodError('Geofence longitude must be between -180 and 180');
+          return;
+        }
+        if (newLon !== appSettings.geofence_lon) update.geofence_lon = newLon;
+      }
+      const parsedGeofenceChannels = geofenceChannels
+        .split(/[\n,]/)
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0);
+      if (
+        JSON.stringify(parsedGeofenceChannels) !==
+        JSON.stringify(appSettings.geofence_channels ?? [])
+      ) {
+        update.geofence_channels = parsedGeofenceChannels;
+      }
+      const newReplyWindow = Number(geofenceReplyWindow);
+      if (
+        geofenceReplyWindow.trim() !== '' &&
+        newReplyWindow !== (appSettings.geofence_reply_window_minutes ?? 30)
+      ) {
+        if (!Number.isInteger(newReplyWindow) || newReplyWindow < 0 || newReplyWindow > 1440) {
+          setFloodError('Reply window must be a whole number of minutes between 0 and 1440');
+          return;
+        }
+        update.geofence_reply_window_minutes = newReplyWindow;
       }
       if (Object.keys(update).length > 0) {
         await onSaveAppSettings(update);
@@ -1415,6 +1476,86 @@ export function SettingsRadioSection({
           within this many hours but with a different timestamp, such as someone replaying old
           messages. Short common texts like &quot;ok&quot; from different people within the window
           are dropped too. Your own messages and normal repeats are not affected.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Geofence Channel Messages</Label>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1">
+            <Label htmlFor="geofence-lat" className="text-xs text-muted-foreground">
+              Centre latitude
+            </Label>
+            <Input
+              id="geofence-lat"
+              type="number"
+              step="any"
+              placeholder="52.37"
+              value={geofenceLat}
+              onChange={(e) => setGeofenceLat(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="geofence-lon" className="text-xs text-muted-foreground">
+              Centre longitude
+            </Label>
+            <Input
+              id="geofence-lon"
+              type="number"
+              step="any"
+              placeholder="4.90"
+              value={geofenceLon}
+              onChange={(e) => setGeofenceLon(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="geofence-radius" className="text-xs text-muted-foreground">
+              Radius (km, 0 = off)
+            </Label>
+            <Input
+              id="geofence-radius"
+              type="number"
+              min="0"
+              max="1000"
+              step="any"
+              value={geofenceRadius}
+              onChange={(e) => setGeofenceRadius(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="geofence-channels" className="text-xs text-muted-foreground">
+            Channels (names or keys, comma-separated)
+          </Label>
+          <Input
+            id="geofence-channels"
+            placeholder="Public"
+            value={geofenceChannels}
+            onChange={(e) => setGeofenceChannels(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="geofence-reply-window" className="text-xs text-muted-foreground">
+            Reply window
+          </Label>
+          <Input
+            id="geofence-reply-window"
+            type="number"
+            min="0"
+            max="1440"
+            step="1"
+            value={geofenceReplyWindow}
+            onChange={(e) => setGeofenceReplyWindow(e.target.value)}
+            className="w-28"
+          />
+          <span className="text-sm text-muted-foreground">minutes (0 = off)</span>
+        </div>
+        <p className="text-[0.8125rem] text-muted-foreground">
+          Drops an incoming message on these channels when the first repeater in its path that has a
+          known location lies inside the circle. Repeaters without a location, and short hop hashes
+          that match repeaters both inside and outside, are skipped. Messages that @-mention you
+          always come through, as does anything arriving within the reply window after your own
+          message on that channel. Dropped packets stay in the packet feed.
         </p>
       </div>
 

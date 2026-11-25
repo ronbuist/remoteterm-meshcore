@@ -302,6 +302,52 @@ async def find_channel_replay(
     return original_id
 
 
+async def drop_by_geofence(
+    *,
+    conversation_key: str,
+    channel_name: str | None,
+    text: str,
+    sender_timestamp: int | None,
+    path: str | None,
+    path_len: int | None,
+    received_at: int,
+) -> bool:
+    """True when an incoming channel message comes from inside the geofence.
+
+    An echo of a message we already stored (ours, or one that came in by a
+    route that passed) is never dropped, so its path still gets recorded.
+    """
+    from app.services.geofence import check_channel_geofence
+
+    origin = await check_channel_geofence(
+        conversation_key=conversation_key,
+        channel_name=channel_name,
+        text=text,
+        path=path,
+        path_len=path_len,
+        received_at=received_at,
+    )
+    if origin is None:
+        return False
+    existing = await MessageRepository.get_by_content(
+        msg_type="CHAN",
+        conversation_key=conversation_key,
+        text=text,
+        sender_timestamp=sender_timestamp,
+    )
+    if existing is not None:
+        return False
+    logger.info(
+        'Dropped channel message "%s" for %r: origin hop %d (%s = %s) is inside the geofence',
+        truncate_for_log(text),
+        _format_channel_log_target(channel_name, conversation_key),
+        origin.hop_index + 1,
+        origin.hop,
+        ", ".join(origin.repeater_names),
+    )
+    return True
+
+
 async def create_message_from_decrypted(
     *,
     packet_id: int,
@@ -343,6 +389,19 @@ async def create_message_from_decrypted(
         # Link the packet to the original so it isn't re-decrypted later and
         # stays traceable in the packet view; the message itself isn't stored.
         await RawPacketRepository.mark_decrypted(packet_id, replayed_id)
+        return None
+
+    if await drop_by_geofence(
+        conversation_key=channel_key_normalized,
+        channel_name=channel_name,
+        text=text,
+        sender_timestamp=timestamp,
+        path=path,
+        path_len=path_len,
+        received_at=received,
+    ):
+        # Not stored, broadcast, pushed or fanned out. The raw packet stays in
+        # the packet feed (undecrypted); historical decryption filters it again.
         return None
 
     msg_id = await MessageRepository.create(
@@ -516,6 +575,17 @@ async def create_fallback_channel_message(
             channel_name=channel_name,
         )
         is not None
+    ):
+        return None
+
+    if await drop_by_geofence(
+        conversation_key=conversation_key_normalized,
+        channel_name=channel_name,
+        text=text,
+        sender_timestamp=sender_timestamp,
+        path=path,
+        path_len=path_len,
+        received_at=received_at,
     ):
         return None
 

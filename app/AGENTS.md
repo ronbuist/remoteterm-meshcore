@@ -405,6 +405,7 @@ Repository writes should prefer typed models such as `ContactUpsert` over ad hoc
 - `telemetry_interval_hours`
 - `send_gap_seconds`
 - `replay_filter_hours` (0 = off; incoming channel messages with the same channel + exact text as one received within N hours but a different sender timestamp are not stored; their raw packet is linked to the original)
+- `geofence_lat`, `geofence_lon`, `geofence_radius_km` (0 = off), `geofence_channels` (names or keys), `geofence_reply_window_minutes` (see `services/geofence.py`: an incoming channel message on a listed channel is not stored when the first path hop that resolves to located repeaters has all its candidates inside the circle; unlocated/ambiguous hops are skipped; `@[radio name]` mentions, messages within the reply window after our own post on that channel, and echoes of an already-stored message always pass; the raw packet stays undecrypted)
 
 Note: MQTT, community MQTT, and bot configs were migrated to the `fanout_configs` table (migrations 36-38).
 

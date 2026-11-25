@@ -5,6 +5,7 @@ from typing import Any
 
 from app.database import db
 from app.models import (
+    CONTACT_TYPE_REPEATER,
     Contact,
     ContactAdvertPath,
     ContactAdvertPathSummary,
@@ -256,6 +257,35 @@ class ContactRepository:
         for p in normalized:
             if len(prefix_to_rows[p]) == 1:
                 result[p] = ContactRepository._row_to_contact(prefix_to_rows[p][0])
+        return result
+
+    @staticmethod
+    async def get_located_repeaters_by_prefixes(prefixes: list[str]) -> dict[str, list[Contact]]:
+        """Map each key prefix to every repeater it matches that has a location.
+
+        Unlike ``resolve_prefixes`` this keeps ambiguous matches, so callers can
+        decide what to do when a short hop hash fits several repeaters. Repeaters
+        without coordinates (NULL or the 0,0 "unset" sentinel) are left out.
+        """
+        normalized = list(dict.fromkeys(p.lower() for p in prefixes if p))
+        if not normalized:
+            return {}
+        conditions = " OR ".join(["public_key LIKE ?"] * len(normalized))
+        params: list[Any] = [CONTACT_TYPE_REPEATER, *(f"{p}%" for p in normalized)]
+        async with db.readonly() as conn:
+            async with conn.execute(
+                "SELECT * FROM contacts WHERE type = ? "
+                "AND lat IS NOT NULL AND lon IS NOT NULL AND NOT (lat = 0 AND lon = 0) "
+                f"AND ({conditions})",
+                params,
+            ) as cursor:
+                rows = await cursor.fetchall()
+        result: dict[str, list[Contact]] = {p: [] for p in normalized}
+        for row in rows:
+            contact = ContactRepository._row_to_contact(row)
+            for p in normalized:
+                if contact.public_key.startswith(p):
+                    result[p].append(contact)
         return result
 
     @staticmethod

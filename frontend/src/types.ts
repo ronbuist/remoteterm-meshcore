@@ -403,6 +403,11 @@ export interface AppSettings {
   ollama_model: string;
   send_gap_seconds: number;
   replay_filter_hours: number;
+  geofence_lat: number | null;
+  geofence_lon: number | null;
+  geofence_radius_km: number;
+  geofence_channels: string[];
+  geofence_reply_window_minutes: number;
 }
 
 export interface AppSettingsUpdate {
@@ -423,6 +428,11 @@ export interface AppSettingsUpdate {
   ollama_model?: string;
   send_gap_seconds?: number;
   replay_filter_hours?: number;
+  geofence_lat?: number;
+  geofence_lon?: number;
+  geofence_radius_km?: number;
+  geofence_channels?: string[];
+  geofence_reply_window_minutes?: number;
 }
 
 export interface ChannelUnreadSummary {

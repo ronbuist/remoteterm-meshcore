@@ -720,6 +720,19 @@ class MessageRepository:
         return MessageRepository._row_to_message(row)
 
     @staticmethod
+    async def get_last_outgoing_channel_at(conversation_key: str, at_or_before: int) -> int | None:
+        """Latest received_at of one of our own messages on a channel, up to a moment."""
+        async with db.readonly() as conn:
+            async with conn.execute(
+                "SELECT MAX(received_at) AS last FROM messages "
+                "WHERE type = 'CHAN' AND conversation_key = ? AND outgoing = 1 "
+                "AND received_at <= ?",
+                (conversation_key, at_or_before),
+            ) as cursor:
+                row = await cursor.fetchone()
+        return int(row["last"]) if row and row["last"] is not None else None
+
+    @staticmethod
     async def find_channel_replay_original(
         conversation_key: str,
         text: str,
